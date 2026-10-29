@@ -1,0 +1,2 @@
+Harmless fixture for mocked Terraform uploads and checksum rendering.
+This is not a FortiAIGate deployment archive and must not be used for deployment.

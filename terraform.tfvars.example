@@ -1,0 +1,36 @@
+aws_region       = "us-west-2"
+name             = "fortiaigate-lab"
+instance_type    = "g6e.2xlarge"
+root_volume_size = 300
+
+# Obtain the official utility archive separately; it is not included in Git.
+utility_archive = "FAIG_deploy-docker-compose-cli-V8.0.2-build0055-FORTINET.tar.gz"
+
+# Optional public IPv4 for direct HTTPS access; /32 is added automatically.
+allowed_https_ip = ""
+# allowed_https_ip = "203.0.113.10"
+
+fortiaigate_version = "8.0.2"
+fortiaigate_build   = "0055"
+
+# Already uploaded? Set the registry/path here to skip repository creation and uploads.
+existing_ecr_registry = ""
+# existing_ecr_registry = "123456789012.dkr.ecr.us-west-2.amazonaws.com/fortiaigate"
+
+# Otherwise terraform apply creates ECR repositories and uploads these local archives.
+image_archive_dir = "./images"
+
+# Optional existing bucket for the utility upload; empty creates a private bucket.
+existing_s3_bucket = ""
+# existing_s3_bucket = "my-deployment-artifacts"
+
+# Null retries across offered AZs in aws_region using a one-instance Auto Scaling group.
+availability_zone = null
+# Or pin a single AZ and use a standalone EC2 instance:
+# availability_zone = "us-west-2b"
+
+# Pin after resolving a tested DLAMI to avoid replacing the host on a future plan.
+# ami_id = "ami-..."
+
+# Disposable lab only: permits deleting uploaded images during terraform destroy.
+# force_destroy_artifacts = true

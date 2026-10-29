@@ -1,0 +1,85 @@
+#!/bin/bash
+set -Eeuo pipefail
+exec > >(tee -a /var/log/fortiaigate-bootstrap.log) 2>&1
+trap 'echo "Bootstrap failed at line $LINENO; inspect /var/log/fortiaigate-bootstrap.log"' ERR
+export DEBIAN_FRONTEND=noninteractive
+
+# The DLAMI supplies the NVIDIA driver, container toolkit, and SSM agent.
+# Keep Docker on EBS rather than the DLAMI's optional ephemeral NVMe storage.
+apt-get update
+apt-get install -y ca-certificates curl unzip jq
+compose_version=$(docker compose version --short 2>/dev/null | sed 's/^v//' | cut -d- -f1 || true)
+if ! command -v docker >/dev/null || ! dpkg --compare-versions "$compose_version" ge 2.23.1; then
+  install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL --retry 5 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  cat >/etc/apt/sources.list.d/docker.list <<'DOCKER_REPO'
+deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu jammy stable
+DOCKER_REPO
+  apt-get update
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+fi
+systemctl stop docker.service docker.socket
+install -d -m 0755 /etc/docker
+python3 - <<'PY'
+import json
+from pathlib import Path
+path = Path('/etc/docker/daemon.json')
+config = json.loads(path.read_text()) if path.exists() else {}
+config['data-root'] = '/var/lib/docker'
+path.write_text(json.dumps(config, indent=2) + '\n')
+PY
+nvidia-ctk runtime configure --runtime=docker
+systemctl enable --now docker
+
+if ! command -v aws >/dev/null; then
+  curl -fsSL --retry 5 https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp/fortiaigate-awscli
+  /tmp/fortiaigate-awscli/aws/install
+fi
+
+if systemctl list-unit-files amazon-ssm-agent.service --no-legend | grep -q amazon-ssm-agent; then
+  systemctl enable --now amazon-ssm-agent
+elif snap list amazon-ssm-agent >/dev/null 2>&1; then
+  snap start --enable amazon-ssm-agent
+else
+  curl -fsSL --retry 5 https://s3.${region}.amazonaws.com/amazon-ssm-${region}/latest/debian_amd64/amazon-ssm-agent.deb -o /tmp/amazon-ssm-agent.deb
+  dpkg -i /tmp/amazon-ssm-agent.deb
+  systemctl enable --now amazon-ssm-agent
+fi
+
+id faig >/dev/null 2>&1 || useradd --create-home --shell /bin/bash faig
+usermod -aG docker faig
+install -d -m 0700 -o faig -g faig /home/faig/deploy-docker-compose
+aws s3 cp '${utility_uri}' /tmp/fortiaigate-cli.tar.gz --region '${region}'
+echo '${utility_sha256}  /tmp/fortiaigate-cli.tar.gz' | sha256sum -c -
+tar -xzf /tmp/fortiaigate-cli.tar.gz -C /home/faig/deploy-docker-compose \
+  deploy-docker-compose.sh USER-GUIDE.md
+chown -R faig:faig /home/faig/deploy-docker-compose
+chmod 0755 /home/faig/deploy-docker-compose/deploy-docker-compose.sh
+
+cat >/etc/fortiaigate-lab.env <<'LAB_ENV'
+export AWS_DEFAULT_REGION='${region}'
+export ECR_REGISTRY='${registry}'
+export ECR_REGISTRY_PATH='${registry_path}'
+export ECR_REGION='${ecr_region}'
+export FORTIAIGATE_VERSION='${image_version}'
+export FORTIAIGATE_BUILD='${image_build}'
+LAB_ENV
+chmod 0644 /etc/fortiaigate-lab.env
+cat >/usr/local/bin/faig-ecr-login <<'LOGIN'
+#!/bin/bash
+set -Eeuo pipefail
+source /etc/fortiaigate-lab.env
+aws ecr get-login-password --region "$ECR_REGION" \
+  | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+printf 'Wizard registry server/path: %s\n' "$ECR_REGISTRY_PATH"
+printf 'Version: %s  Build: %s  Tag pattern: V{version}-build{build}\n' "$FORTIAIGATE_VERSION" "$FORTIAIGATE_BUILD"
+LOGIN
+chmod 0755 /usr/local/bin/faig-ecr-login
+nvidia-smi
+docker compose version
+docker info --format '{{.DockerRootDir}}'
+runuser -u faig -- /home/faig/deploy-docker-compose/deploy-docker-compose.sh --self-test
+touch /var/lib/fortiaigate-bootstrap-complete
+echo 'FortiAIGate host bootstrap complete. Connect with SSM, then sudo -iu faig.'

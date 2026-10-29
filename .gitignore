@@ -1,0 +1,16 @@
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+crash.log
+images/
+faig_deployment_assistant_data/
+vendor/
+*.lic
+.env
+__pycache__/
+*.pyc
+FAIG_deploy-docker-compose-cli*
