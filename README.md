@@ -6,11 +6,13 @@ Download the official FortiAIGate Compose utility archive separately; it is not 
 
 ## 1. Configure
 
-You need Terraform 1.7+, AWS CLI credentials with infrastructure and SSM session permissions, and the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html). Your region needs G6e capacity and at least 8 available On-Demand G/VT vCPUs of quota.
+You need Terraform 1.7+, AWS CLI credentials with infrastructure and SSM session permissions, and the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html). Your region needs capacity for the selected instance type and sufficient On-Demand G/VT vCPU quota (at least 8 vCPUs for either 2xlarge option).
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
+
+For a smaller lab trial, set `instance_type = "g5.2xlarge"`. This option has 32 GiB host RAM, below the utility's 64 GiB guidance, and less GPU memory than G6e. Terraform accepting the instance type does not establish that the selected FortiAIGate models fit; verify runtime memory use after deployment. The default remains `g6e.2xlarge`.
 
 Edit `terraform.tfvars`. Set `availability_zone = null` (or omit it) to let AWS retry across AZs offering your instance type within `aws_region`. Pin an AZ to use a standalone EC2 instance instead.
 

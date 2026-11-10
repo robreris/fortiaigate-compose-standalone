@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "Region with G6e capacity and sufficient On-Demand G/VT vCPU quota."
+  description = "Region offering the selected GPU instance type with sufficient On-Demand G/VT vCPU quota."
   type        = string
   default     = "us-west-2"
 }
@@ -32,12 +32,12 @@ variable "allowed_https_ip" {
 }
 
 variable "instance_type" {
-  description = "Single L40S GPU; 2xlarge is the smallest G6e size meeting the utility's 8 vCPU / 64 GiB guidance."
+  description = "Single-GPU instance type. G6e defaults meet the 8 vCPU / 64 GiB guidance; g5.2xlarge is allowed for smaller lab trials with 32 GiB host RAM."
   type        = string
   default     = "g6e.2xlarge"
   validation {
-    condition     = contains(["g6e.2xlarge", "g6e.4xlarge", "g6e.8xlarge", "g6e.16xlarge"], var.instance_type)
-    error_message = "Select a supported single-GPU G6e instance with at least 8 vCPUs and 64 GiB RAM."
+    condition     = contains(["g5.2xlarge", "g6e.2xlarge", "g6e.4xlarge", "g6e.8xlarge", "g6e.16xlarge"], var.instance_type)
+    error_message = "Select g5.2xlarge for a smaller lab trial, or g6e.2xlarge, g6e.4xlarge, g6e.8xlarge, or g6e.16xlarge."
   }
 }
 
